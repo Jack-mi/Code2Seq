@@ -71,8 +71,8 @@ torch.manual_seed(1)
 random_state = 42
 
 run_id = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
-log_file = '../logs/' + run_id + '.log'
-exp_dir = '../runs/' + run_id
+log_file = 'logs/' + run_id + '.log'
+exp_dir = 'runs/' + run_id
 os.mkdir(exp_dir)
 
 logging.basicConfig(format='%(asctime)s | %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename=log_file, level=logging.DEBUG)
