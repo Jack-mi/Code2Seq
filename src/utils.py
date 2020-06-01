@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-import torch
-from nltk import bleu_score
-
 PAD = 0
 BOS = 1
 EOS = 2
@@ -15,6 +12,7 @@ class Vocab(object):
     
     # 构建词典
     def build_vocab(self, sentences, min_count=1):
+        # 统计sentences中所有词出现的频次
         word_counter = {}
         for word in sentences:
             word_counter[word] = word_counter.setdefault(word, 0) + 1

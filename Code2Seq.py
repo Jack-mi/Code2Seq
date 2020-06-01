@@ -84,9 +84,6 @@ msgr.print_msg('exp_dir : {}'.format(exp_dir))
 msgr.print_msg('device : {}'.format(device))
 msgr.print_msg(str(config))
 
-torch.manual_seed(1)
-random_state = 42
-
 PAD_TOKEN = '<PAD>'
 BOS_TOKEN = '<S>'
 EOS_TOKEN = '</S>'
@@ -96,15 +93,6 @@ BOS = 1
 EOS = 2
 UNK = 3
 
-# making vocab dicts for terminal subtoken, nonterminal node and target.
-
-word2id = {
-    PAD_TOKEN: PAD,
-    BOS_TOKEN: BOS,
-    EOS_TOKEN: EOS,
-    UNK_TOKEN: UNK,
-    }
-
 # load vocab dict
 with open(DICT_FILE, 'rb') as file:
     subtoken_to_count = pickle.load(file)
@@ -112,6 +100,14 @@ with open(DICT_FILE, 'rb') as file:
     target_to_count = pickle.load(file)
     max_contexts = pickle.load(file)
     num_training_examples = pickle.load(file)
+
+# making vocab dicts for terminal subtoken, nonterminal node and target.
+word2id = {
+    PAD_TOKEN: PAD,
+    BOS_TOKEN: BOS,
+    EOS_TOKEN: EOS,
+    UNK_TOKEN: UNK,
+    }
 
 vocab_subtoken = utils.Vocab(word2id=word2id)
 vocab_nodes = utils.Vocab(word2id=word2id)
@@ -125,7 +121,12 @@ vocab_size_subtoken = len(vocab_subtoken.id2word)   # 73908 ：AST的叶子节�
 vocab_size_nodes = len(vocab_nodes.id2word)         # 325   ：AST的非叶子节点，java函数的逻辑词表达
 vocab_size_target = len(vocab_target.id2word)       # 11320 ：java method的name
 
+msgr.print_msg('vocab_size_subtoken：' + str(vocab_size_subtoken))
+msgr.print_msg('vocab_size_nodes：' + str(vocab_size_nodes))
+msgr.print_msg('vocab_size_target：' + str(vocab_size_target))
+
 num_length_train = num_training_examples            # 691974：training set的样本数
+msgr.print_msg('num_examples : ' + str(num_length_train))
 
 class MyDataset(Dataset):
     def __init__(self, data_path, num_k):
@@ -407,14 +408,16 @@ class Decoder(nn.Module):
         self.gru = nn.GRU(hidden_size, hidden_size, dropout=rnn_dropout)
         self.out = nn.Linear(hidden_size * 2, output_size)
 
-    def forward(self, seqs, hidden, attn):
-        emb = self.embedding(seqs)
-        _, hidden = self.gru(emb, hidden)
+    def forward(self, decoder_input, decoder_hidden, attn_context):
+        decoder_input = self.embedding(decoder_input)
+        # 理解attention的关键在于找到hidden state和attn_context的结合方式（位置）
+        # 此时在rnn中并没有直接将二者concat，而是在gru输出后再concat
+        _, decoder_hidden = self.gru(decoder_input, decoder_hidden)
         # attn仅在预测output的时候有用，和last hidden state结合
-        output = torch.cat((hidden, attn), 2)
+        output = torch.cat((decoder_hidden, attn_context), 2)
         output = self.out(output)
 
-        return output, hidden
+        return output, decoder_hidden
 
 class EncoderDecoder_with_Attention(nn.Module):
     """Conbine Encoder and Decoder"""
@@ -508,6 +511,7 @@ class EncoderDecoder_with_Attention(nn.Module):
         ct = [torch.einsum('i,ij->j', a, e).unsqueeze(0) for a, e in zip(at, encoder_output_bag)]
 
         # ct [batch, hidden_size] -> (1, batch, hidden_size)
+        # 将ct由长度为256的list(每个元素是(1, 64))变为shape为(1, 256, 64)的tensor
         ct = torch.cat(ct, dim=0).unsqueeze(0)
 
         return ct
